@@ -7,9 +7,9 @@
 #[allow(unused_variable, unused_must_use)];
 
 use std::{io, run, task, str};
-use std::io::{BufferedReader, File, Truncate, Write};
+use std::io::{File, Truncate, Write};
+use std::io::buffered::BufferedReader;
 use std::run::{Process, ProcessOptions};
-use std::comm::{Disconnected, Empty, Data};
 use std::path::Path;
 
 use builtins::Builtins;
@@ -45,7 +45,7 @@ impl Sh {
             print!("{}", self.prompt);
             io::stdio::flush();
 
-            let line: ~str = stdin.read_line().ok().expect(format!("Error on file: {} at line {}", file!(), line!()));
+            let line: ~str = stdin.read_line().expect(format!("Error on file: {} at line {}", file!(), line!()));
             match lex::execute(line) {
                 Ok(cmd)     => {
                     if cmd.len() != 0 {
@@ -61,9 +61,8 @@ impl Sh {
             }
 
             match self.port.try_recv() {
-                Data(t)         => print!("{}", t),
-                Empty           => {/* nothing to do */},
-                Disconnected    => {/* nothing to do */}
+                Some(t) => print!("{}", t),
+                None    => {/* nothing to do */}
             }
         }
     }
@@ -112,13 +111,13 @@ impl Sh {
         if builtins::is_builtin(cmd[0]) {
             self.builtins.execute(cmd)
         } else {
-            if *cmd.last().expect(format!("Error on file: {} at line {}", file!(), line!())) == ~"&" {
-                let prg = cmd.shift().expect(format!("Error on file: {} at line {}", file!(), line!()));
+            if *cmd.last_opt().expect(format!("Error on file: {} at line {}", file!(), line!())) == ~"&" {
+                let prg = cmd.shift_opt().expect(format!("Error on file: {} at line {}", file!(), line!()));
                 cmd.pop();
                 let chan = self.chan.clone();
                 task::spawn(proc() {
                     let result = match Process::new(prg, cmd, ProcessOptions::new()) {
-                        Ok(mut pr) => {
+                        Some(mut pr) => {
                             let out = pr.finish_with_output();
                             let mut r = format!("\n[proc {}] Done: {}\n", pr.get_id() as i32, prg);
                             unsafe {
@@ -127,7 +126,7 @@ impl Sh {
                             }
                             r
                         },
-                        Err(_) => format!("-gash: {}: command not found\n", prg)
+                        None => format!("-gash: {}: command not found\n", prg)
                     };
                     
                     chan.send(result)
@@ -135,9 +134,9 @@ impl Sh {
 
                 (format!(""), Continue)
             } else {
-                let prg = cmd.shift().expect(format!("Error on file: {} at line {}", file!(), line!()));
+                let prg = cmd.shift_opt().expect(format!("Error on file: {} at line {}", file!(), line!()));
                 match run::process_output(prg, cmd) {
-                    Ok(out)     => {
+                    Some(out)     => {
                         let mut result;
                         unsafe {
                             result = str::raw::from_utf8(out.output).to_owned();
@@ -145,7 +144,7 @@ impl Sh {
                         }
                         (result, Continue)
                     },
-                    Err(_)      => (format!("-gash: {}: command not found\n", prg), Continue)
+                    None      => (format!("-gash: {}: command not found\n", prg), Continue)
                 }
             }
         }

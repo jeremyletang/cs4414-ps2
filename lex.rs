@@ -18,7 +18,7 @@ fn syntax_error(cmds: &[~str], c2: char) -> Result<(), ~str> {
             if cmds.len() == 0 {
                 Err(format!("-gash: syntax error near unexpected token \'{}\'\n", c2))
             } else {
-                let c1 = cmds.last().unwrap().char_at(0);
+                let c1 = cmds.last_opt().unwrap().char_at(0);
                 if special_chars.iter().find(|x| **x == c1).is_some() {
                     Ok(())
                 } else {
@@ -73,7 +73,7 @@ pub fn execute(cmd: &str) -> Result<~[~str], ~str> {
     }
     if cur_str != ~"" { cmds.push(cur_str); }
     if cmds.len() == 0 { return Ok(cmds); }
-    match last_token_is_valid(cmds.last().unwrap().char_at(0)) {
+    match last_token_is_valid(cmds.last_opt().unwrap().char_at(0)) {
         true    => Ok(cmds),
         false   => Err(~"-gash: syntax error near unexpected token \'newline\'\n")
     }
