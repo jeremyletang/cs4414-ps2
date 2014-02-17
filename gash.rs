@@ -4,17 +4,17 @@
 * Jeremy Letang / free student
 */
 
-#[allow(unused_variable, unused_must_use)];
+#[allow(unused_variable)];
 
 use std::{io, run, task, str, os};
-use std::io::{File, Truncate, Write};
 use std::io::buffered::BufferedReader;
 use std::run::{Process, ProcessOptions};
+use std::os::Pipe;
 use std::libc::c_int;
 use std::libc;
 
 use builtins::Builtins;
-use error_code::{ErrorCode, Continue, Exit};
+use error_code::Exit;
 
 mod error_code;
 mod builtins;
@@ -40,6 +40,7 @@ impl Sh {
     }
 
     pub fn run(&mut self) {
+        signal::catch();
         let mut stdin = BufferedReader::new(io::stdin());
 
         loop {
@@ -52,7 +53,7 @@ impl Sh {
                     if cmd.len() != 0 {
                         if builtins::is_builtin(cmd[0]) {
                             match  self.builtins.execute(cmd) {
-                                (out, Exit)     => { print!("{}", out); os::set_exit_status(0); break },
+                                (out, Exit)     => { print!("{}", out); unsafe {libc::exit(0)} },
                                 (out, _)        => { print!("{}", out) }
                             };
                         } else {
@@ -85,7 +86,28 @@ impl Sh {
     }
 
     pub fn pipe(&mut self, cmd: ~[~str], p_in: c_int, p_out: c_int) {
-        // (~"Not implemented\n", Continue)
+        // let cmds: ~[~str] = cmd.split('|').collect();
+        let mut cmds: ~[~[~str]] = ~[];
+        let mut tmp_cmd: ~[~str] = ~[];
+
+        for c in cmd.move_iter() {
+            if c == ~"|" {
+                cmds.push(tmp_cmd);
+                tmp_cmd = ~[];
+            } else {
+                tmp_cmd.push(c);
+            }
+        }
+        cmds.push(tmp_cmd);
+
+        let mut pipes: ~[Pipe] = ~[];
+        pipes.push(Pipe {input: 0, out: 0});
+        for _ in range(0, cmds.len() - 1) { pipes.push(os::pipe()); }
+        pipes.push(Pipe {input: 1, out: 1});
+               
+        for i in range(0, cmds.len()) {
+            self.execute(cmds[i].clone(), pipes[i].input, pipes[i+1].out);
+        }
     }
 
     pub fn redirect_left(&mut self, cmd: ~[~str], p_in: c_int, p_out: c_int) {
