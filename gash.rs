@@ -86,7 +86,6 @@ impl Sh {
     }
 
     pub fn pipe(&mut self, cmd: ~[~str], p_in: c_int, p_out: c_int) {
-        // let cmds: ~[~str] = cmd.split('|').collect();
         let mut cmds: ~[~[~str]] = ~[];
         let mut tmp_cmd: ~[~str] = ~[];
 
@@ -177,7 +176,6 @@ impl Sh {
                 if p_in != 0 {os::close(p_in);}
                 if p_out != 1 {os::close(p_out);}
                 proc_res.finish();
-                // io::stdio::flush();
             }
     }
 
